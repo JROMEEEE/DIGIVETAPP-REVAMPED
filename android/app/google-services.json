@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "354715525689",
+    "project_id": "digivetapp-f0dcc",
+    "storage_bucket": "digivetapp-f0dcc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:354715525689:android:c354353fd51d322167e3e8",
+        "android_client_info": {
+          "package_name": "ph.gov.lipacity.digivet_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDPe7GWClitsEvD_xzDihnFqvC4b0BUkXk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
