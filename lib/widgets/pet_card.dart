@@ -10,7 +10,7 @@ Color ringColor(DueStatus s) => switch (s) {
   DueStatus.overdue => const Color(0xFFF4A9A9),
   DueStatus.dueSoon => Brand.gold300,
   DueStatus.upToDate => Brand.cream,
-  DueStatus.none => Colors.white38,
+  DueStatus.none || DueStatus.passedAway || DueStatus.lost => Colors.white38,
 };
 
 /// One pet on the owner's Home. The pet itself is the hero: a large dog/cat
@@ -32,6 +32,8 @@ class PetCard extends StatelessWidget {
       DueStatus.dueSoon => 'Due soon',
       DueStatus.upToDate => 'Up to date',
       DueStatus.none => '',
+      DueStatus.passedAway => 'Passed away',
+      DueStatus.lost => 'Lost',
     };
     final ringNumber = days == null ? '—' : (days == 0 ? '0' : '${days.abs()}');
 

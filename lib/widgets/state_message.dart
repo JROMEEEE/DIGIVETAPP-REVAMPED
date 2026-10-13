@@ -100,4 +100,14 @@ class StateMessage extends StatelessWidget {
     fg: Brand.inkSoft,
     bg: const Color(0xFFF1F5F9),
   ),
+  DueStatus.passedAway => (
+    label: 'Passed away',
+    fg: Brand.inkSoft,
+    bg: const Color(0xFFF1F5F9),
+  ),
+  DueStatus.lost => (
+    label: 'Lost',
+    fg: Brand.inkSoft,
+    bg: const Color(0xFFF1F5F9),
+  ),
 };

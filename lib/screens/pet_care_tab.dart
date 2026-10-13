@@ -86,6 +86,8 @@ class _PetCareTabState extends State<PetCareTab> {
       DueStatus.dueSoon: 1,
       DueStatus.upToDate: 2,
       DueStatus.none: 3,
+      DueStatus.passedAway: 4,
+      DueStatus.lost: 4,
     };
     final sorted = [...pets]
       ..sort((a, b) {
@@ -256,7 +258,7 @@ class _ReminderCard extends StatelessWidget {
       DueStatus.overdue => const Color(0xFFB3261E),
       DueStatus.dueSoon => const Color(0xFF8A5A00),
       DueStatus.upToDate => Brand.maroon700,
-      DueStatus.none => Brand.inkSoft,
+      DueStatus.none || DueStatus.passedAway || DueStatus.lost => Brand.inkSoft,
     };
     final big = days == null ? '—' : (days == 0 ? 'Today' : '${days.abs()}');
     final unit = days == null
