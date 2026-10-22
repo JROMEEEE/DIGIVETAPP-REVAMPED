@@ -2,7 +2,9 @@
 /// overdue if the next due date has passed, due soon within 30 days, and
 /// [none] for a pet with no vaccinations on record yet.
 /// passedAway / lost: the owner or LCVO marked the pet — no reminders, no due date.
-enum DueStatus { overdue, dueSoon, upToDate, none, passedAway, lost }
+/// historical: last seen before 2024 (server's is_historical) — the old record
+/// is kept, but it isn't overdue and gets no reminders.
+enum DueStatus { overdue, dueSoon, upToDate, none, passedAway, lost, historical }
 
 DateTime _day(String iso) {
   final p = iso.substring(0, 10).split('-').map(int.parse).toList();
@@ -63,6 +65,7 @@ class Pet {
     this.lifeNote,
     this.lifeChangedAt,
     this.canChangeStatus = true,
+    this.isHistorical = false,
     this.registrationNo,
     this.birthDate,
     this.birthDateEstimated = false,
@@ -85,6 +88,9 @@ class Pet {
   /// Whether this owner may still mark / undo the status (their own mark,
   /// within 7 days — decided by the server).
   final bool canChangeStatus;
+
+  /// Last seen before 2024 (decided by the server): kept for the record only.
+  final bool isHistorical;
   final String? registrationNo;
   final DateTime? birthDate;
   final bool birthDateEstimated;
@@ -115,6 +121,7 @@ class Pet {
           ? null
           : DateTime.tryParse(j['life_status_changed_at'] as String),
       canChangeStatus: (j['can_change_status'] ?? true) as bool,
+      isHistorical: (j['is_historical'] ?? false) as bool,
       registrationNo: j['registration_no'] as String?,
       birthDate: j['birth_date'] == null
           ? null
@@ -134,13 +141,14 @@ class Pet {
 
   Vaccination? get latest => vaccinations.isEmpty ? null : vaccinations.last;
 
-  /// No next dose for a pet marked passed away / lost — so reminders, Home's
-  /// "up next" and Pet Care all skip it.
-  DateTime? get nextDue => isActive ? latest?.nextDue : null;
+  /// No next dose for a pet marked passed away / lost, or a historical
+  /// (pre-2024) one — so reminders, Home's "up next" and Pet Care all skip it.
+  DateTime? get nextDue => isActive && !isHistorical ? latest?.nextDue : null;
 
   DueStatus get status {
     if (isPassedAway) return DueStatus.passedAway;
     if (isLost) return DueStatus.lost;
+    if (isHistorical) return DueStatus.historical;
     if (latest == null) return DueStatus.none;
     final due = nextDue;
     if (due == null) return DueStatus.upToDate;

@@ -86,6 +86,7 @@ class _PetCareTabState extends State<PetCareTab> {
       DueStatus.dueSoon: 1,
       DueStatus.upToDate: 2,
       DueStatus.none: 3,
+      DueStatus.historical: 3,
       DueStatus.passedAway: 4,
       DueStatus.lost: 4,
     };
@@ -204,6 +205,15 @@ class _Banner extends StatelessWidget {
             const Color(0xFF8A5A00),
             const Color(0xFFFDF0D0),
           )
+        : pets.isNotEmpty && pets.every((p) => p.isHistorical || !p.isActive)
+        // Only records from before 2024: nothing is "protected" — say what's true.
+        ? (
+            Icons.history_rounded,
+            'No recent vaccinations on record',
+            "Your pets' last LCVO shots were before 2024. Visit LCVO to update.",
+            Brand.inkSoft,
+            const Color(0xFFF1F5F9),
+          )
         : (
             Icons.check_circle_outline_rounded,
             pets.length == 1
@@ -258,7 +268,7 @@ class _ReminderCard extends StatelessWidget {
       DueStatus.overdue => const Color(0xFFB3261E),
       DueStatus.dueSoon => const Color(0xFF8A5A00),
       DueStatus.upToDate => Brand.maroon700,
-      DueStatus.none || DueStatus.passedAway || DueStatus.lost => Brand.inkSoft,
+      DueStatus.none || DueStatus.passedAway || DueStatus.lost || DueStatus.historical => Brand.inkSoft,
     };
     final big = days == null ? '—' : (days == 0 ? 'Today' : '${days.abs()}');
     final unit = days == null
@@ -270,6 +280,8 @@ class _ReminderCard extends StatelessWidget {
               : (days == 1 ? 'day' : 'days'));
     final next = pet.latest == null
         ? 'No schedule yet'
+        : pet.isHistorical
+        ? 'Last shot ${formatDate(pet.latest!.date)} · before 2024'
         : 'Next: ${pet.latest!.vaccineName}${pet.nextDue == null ? '' : ' · ${formatDate(pet.nextDue!)}'}';
 
     return Padding(

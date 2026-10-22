@@ -110,4 +110,9 @@ class StateMessage extends StatelessWidget {
     fg: Brand.inkSoft,
     bg: const Color(0xFFF1F5F9),
   ),
+  DueStatus.historical => (
+    label: 'Historical',
+    fg: Brand.inkSoft,
+    bg: const Color(0xFFF1F5F9),
+  ),
 };
