@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models/correction_request.dart';
+import '../data/care_tips.dart';
 import '../models/pet.dart';
 import '../services/auth_service.dart';
 import '../services/owner_data.dart';
 import '../theme.dart';
-import '../utils/format.dart';
 import '../widgets/fade_in.dart';
 import '../widgets/lcvo_card.dart';
 import '../widgets/pet_card.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/state_message.dart';
+import '../widgets/vaccination_timeline.dart';
 import 'pet_detail_screen.dart';
 
-/// Owner Home. Phase 1: header, loading / error / empty states, and the
-/// data plumbing. The swipeable pet cards, "Up next" and "Recent" replace the
-/// simple list below in the next phases.
+/// Owner Home, the phone version of the web portal's dashboard: the big pet
+/// card (opens on the pet that needs attention most), the 12-month
+/// Vaccination status timeline, the Tip of the day, and the LCVO card.
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
@@ -25,10 +25,33 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
+  final _carousel = GlobalKey<_PetCarouselState>();
+  final _scroll = ScrollController();
+
   @override
   void initState() {
     super.initState();
     OwnerData.instance.ensureLoaded();
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  // Tapping a pet on the timeline puts it on the big card, like hovering a
+  // face on the web dashboard.
+  void _showPet(Pet pet) {
+    HapticFeedback.selectionClick();
+    _carousel.currentState?.showPet(pet.id);
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   String get _greeting {
@@ -54,6 +77,7 @@ class _HomeTabState extends State<HomeTab> {
           child: ListenableBuilder(
             listenable: OwnerData.instance,
             builder: (context, _) => CustomScrollView(
+              controller: _scroll,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(
@@ -97,14 +121,20 @@ class _HomeTabState extends State<HomeTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FadeIn(
-          child: _PetCarousel(
+          child: KeyedSubtree(
             key: ValueKey(pets.map((p) => p.id).join(',')),
-            pets: pets,
+            child: _PetCarousel(key: _carousel, pets: pets),
           ),
         ),
-        FadeIn(index: 1, child: _UpNext(pets: pets)),
-        FadeIn(index: 2, child: _Recent(pets: pets)),
-        FadeIn(index: 3, child: _Requests(requests: data.requests)),
+        const SizedBox(height: 22),
+        FadeIn(
+          index: 1,
+          child: VaccinationTimeline(pets: pets, onPick: _showPet),
+        ),
+        const SizedBox(height: 14),
+        const FadeIn(index: 2, child: _TipOfTheDay()),
+        const SizedBox(height: 14),
+        const FadeIn(index: 3, child: SizedBox(height: 196, child: LcvoCard())),
       ],
     );
   }
@@ -280,10 +310,21 @@ class _PetCarouselState extends State<_PetCarousel> {
     super.dispose();
   }
 
+  /// Turn to [petId]'s card (from the timeline).
+  void showPet(String petId) {
+    final i = widget.pets.indexWhere((p) => p.id == petId);
+    if (i < 0 || !_controller.hasClients) return;
+    _controller.animateToPage(
+      i,
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pets = widget.pets;
-    final pages = pets.length + 1; // the pets, then the LCVO Facebook card
+    final pages = pets.length; // the LCVO card now has its own place below
     return Column(
       children: [
         SizedBox(
@@ -298,21 +339,19 @@ class _PetCarouselState extends State<_PetCarousel> {
             },
             itemBuilder: (context, i) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
-              child: i < pets.length
-                  ? GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => PetDetailScreen(petId: pets[i].id),
-                        ),
-                      ),
-                      child: PetCard(pet: pets[i]),
-                    )
-                  : const LcvoCard(),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => PetDetailScreen(petId: pets[i].id),
+                  ),
+                ),
+                child: PetCard(pet: pets[i]),
+              ),
             ),
           ),
         ),
-        ...[
+        if (pages > 1) ...[
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -337,319 +376,71 @@ class _PetCarouselState extends State<_PetCarousel> {
   }
 }
 
-/// The next dose due across all pets (soonest date first, overdue included).
-class _UpNext extends StatelessWidget {
-  const _UpNext({required this.pets});
-  final List<Pet> pets;
+/// Same tip all day (changes at midnight), picked by the day of the year,
+/// like the web dashboard's Tip of the day.
+class _TipOfTheDay extends StatelessWidget {
+  const _TipOfTheDay();
 
   @override
   Widget build(BuildContext context) {
-    final due = pets.where((p) => p.nextDue != null).toList()
-      ..sort((a, b) => a.nextDue!.compareTo(b.nextDue!));
-    if (due.isEmpty) return const SizedBox.shrink();
-    final pet = due.first;
-    final days = pet.daysRemaining!;
-    final st = statusStyle(pet.status);
-    final accent = switch (pet.status) {
-      DueStatus.overdue => const Color(0xFFB3261E),
-      DueStatus.dueSoon => const Color(0xFF8A5A00),
-      _ => Brand.maroon700,
-    };
-    return Padding(
-      padding: const EdgeInsets.only(top: 22),
-      child: Column(
+    final now = DateTime.now();
+    final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays + 1;
+    final tip = careTips[dayOfYear % careTips.length];
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: Brand.cream,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'UP NEXT',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-              color: Brand.inkSoft,
-            ),
-          ),
-          const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-            decoration: BoxDecoration(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Brand.border),
+              shape: BoxShape.circle,
             ),
-            child: Row(
+            child: Icon(tip.icon, color: Brand.maroon700, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  days == 0 ? 'Today' : '${days.abs()}',
+                const Text(
+                  'TIP OF THE DAY',
                   style: TextStyle(
-                    fontFamily: Brand.serif,
-                    fontSize: days == 0 ? 30 : 40,
-                    height: 1,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: accent,
+                    letterSpacing: 1,
+                    color: Color(0xFF8A5A00),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        days == 0
-                            ? 'dose due'
-                            : (days < 0
-                                  ? 'days overdue'
-                                  : (days == 1
-                                        ? 'day until next dose'
-                                        : 'days until next dose')),
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          color: Brand.inkSoft,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        pet.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: Brand.ink,
-                        ),
-                      ),
-                      Text(
-                        formatDate(pet.nextDue!),
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          color: Brand.inkSoft,
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 3),
+                Text(
+                  tip.title,
+                  style: const TextStyle(
+                    fontFamily: Brand.serif,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Brand.maroon900,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: st.bg,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Text(
-                    st.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: st.fg,
-                    ),
+                const SizedBox(height: 4),
+                Text(
+                  tip.detail,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    height: 1.45,
+                    color: Brand.ink,
                   ),
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1,
-        color: Brand.inkSoft,
-      ),
-    );
-  }
-}
-
-/// The last three shots across all pets, newest first, on a dotted timeline.
-class _Recent extends StatelessWidget {
-  const _Recent({required this.pets});
-  final List<Pet> pets;
-
-  @override
-  Widget build(BuildContext context) {
-    final shots = [
-      for (final p in pets)
-        for (final v in p.vaccinations) (pet: p.name, shot: v),
-    ]..sort((a, b) => b.shot.date.compareTo(a.shot.date));
-    if (shots.isEmpty) return const SizedBox.shrink();
-    final recent = shots.take(3).toList();
-    return Padding(
-      padding: const EdgeInsets.only(top: 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionLabel('RECENT'),
-          const SizedBox(height: 12),
-          for (var i = 0; i < recent.length; i++)
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: 22,
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 5),
-                        Container(
-                          width: 11,
-                          height: 11,
-                          decoration: const BoxDecoration(
-                            color: Brand.maroon700,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        if (i < recent.length - 1)
-                          Expanded(
-                            child: Container(width: 2, color: Brand.border),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        bottom: i < recent.length - 1 ? 16 : 0,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            recent[i].shot.vaccineName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w700,
-                              color: Brand.ink,
-                            ),
-                          ),
-                          const SizedBox(height: 1),
-                          Text(
-                            '${recent[i].pet} · ${formatDate(recent[i].shot.date)}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Brand.inkSoft,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Shown only when the owner has sent correction requests.
-class _Requests extends StatelessWidget {
-  const _Requests({required this.requests});
-  final List<CorrectionRequest> requests;
-
-  @override
-  Widget build(BuildContext context) {
-    if (requests.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionLabel('CORRECTION REQUESTS'),
-          const SizedBox(height: 10),
-          for (final r in requests.take(2))
-            Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Brand.border),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          r.petName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w700,
-                            color: Brand.ink,
-                          ),
-                        ),
-                        Text(
-                          r.fields.isEmpty
-                              ? 'Profile update'
-                              : r.fields.join(', '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Brand.inkSoft,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _RequestChip(r.status),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RequestChip extends StatelessWidget {
-  const _RequestChip(this.status);
-  final RequestStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, fg, bg) = switch (status) {
-      RequestStatus.pending => (
-        'Pending',
-        const Color(0xFF8A5A00),
-        const Color(0xFFFDF0D0),
-      ),
-      RequestStatus.approved => ('Approved', Brand.green700, Brand.green100),
-      RequestStatus.rejected => (
-        'Rejected',
-        const Color(0xFFB3261E),
-        const Color(0xFFFDECEA),
-      ),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg),
       ),
     );
   }

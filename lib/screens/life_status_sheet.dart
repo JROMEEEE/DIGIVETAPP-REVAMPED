@@ -55,7 +55,9 @@ class _LifeStatusSheetState extends State<_LifeStatusSheet> {
       lastDate: now,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(primary: Brand.maroon700),
+          colorScheme: Theme.of(
+            context,
+          ).colorScheme.copyWith(primary: Brand.maroon700),
         ),
         child: child!,
       ),
@@ -95,30 +97,50 @@ class _LifeStatusSheetState extends State<_LifeStatusSheet> {
     final name = widget.pet.name;
     final passed = _status == 'deceased';
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(22, 4, 22, 22 + MediaQuery.of(context).viewPadding.bottom),
+        padding: EdgeInsets.fromLTRB(
+          22,
+          4,
+          22,
+          22 + MediaQuery.of(context).viewPadding.bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               'Update $name’s status',
-              style: const TextStyle(fontFamily: Brand.serif, fontSize: 26, fontWeight: FontWeight.w700, color: Brand.maroon900),
+              style: const TextStyle(
+                fontFamily: Brand.serif,
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                color: Brand.maroon900,
+              ),
             ),
             const SizedBox(height: 16),
             Row(
               children: [
-                for (final (value, label) in const [('deceased', 'Passed away'), ('lost', 'Lost or missing')]) ...[
+                for (final (value, label) in const [
+                  ('deceased', 'Passed away'),
+                  ('lost', 'Lost or missing'),
+                ]) ...[
                   Expanded(
                     child: ChoiceChip(
-                      label: SizedBox(width: double.infinity, child: Text(label, textAlign: TextAlign.center)),
+                      label: SizedBox(
+                        width: double.infinity,
+                        child: Text(label, textAlign: TextAlign.center),
+                      ),
                       selected: _status == value,
                       showCheckmark: false,
                       onSelected: (_) => setState(() => _status = value),
                       selectedColor: Brand.maroon100,
                       labelStyle: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: _status == value ? Brand.maroon700 : Brand.inkSoft,
+                        color: _status == value
+                            ? Brand.maroon700
+                            : Brand.inkSoft,
                       ),
                     ),
                   ),
@@ -129,16 +151,26 @@ class _LifeStatusSheetState extends State<_LifeStatusSheet> {
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: const Color(0xFFF6F3EE), borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F3EE),
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Text(
                 passed
                     ? 'We’re so sorry for your loss. $name’s vaccination records will be kept, and reminders will stop.'
                     : 'We hope $name comes home soon. Reminders will pause. You can change this back within 7 days, or ask LCVO after that.',
-                style: const TextStyle(fontSize: 14.5, height: 1.5, color: Brand.ink),
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  height: 1.5,
+                  color: Brand.ink,
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            Text(passed ? 'DATE (OPTIONAL)' : 'MISSING SINCE (OPTIONAL)', style: _caption),
+            Text(
+              passed ? 'DATE (OPTIONAL)' : 'MISSING SINCE (OPTIONAL)',
+              style: _caption,
+            ),
             const SizedBox(height: 6),
             OutlinedButton.icon(
               onPressed: _pickDate,
@@ -149,7 +181,9 @@ class _LifeStatusSheetState extends State<_LifeStatusSheet> {
                 alignment: Alignment.centerLeft,
                 minimumSize: const Size.fromHeight(48),
                 side: const BorderSide(color: Brand.border, width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -161,13 +195,23 @@ class _LifeStatusSheetState extends State<_LifeStatusSheet> {
               maxLines: 3,
               minLines: 2,
               decoration: InputDecoration(
-                hintText: passed ? 'Anything you would like to share' : 'Where or when they were last seen',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                hintText: passed
+                    ? 'Anything you would like to share'
+                    : 'Where or when they were last seen',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             if (_error != null) ...[
               const SizedBox(height: 6),
-              Text(_error!, style: const TextStyle(color: Color(0xFFB3261E), fontWeight: FontWeight.w600)),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: Color(0xFFB3261E),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
             const SizedBox(height: 12),
             FilledButton(
@@ -176,14 +220,20 @@ class _LifeStatusSheetState extends State<_LifeStatusSheet> {
                 backgroundColor: Brand.maroon700,
                 minimumSize: const Size.fromHeight(52),
                 shape: const StadiumBorder(),
-                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               child: Text(_busy ? 'Saving…' : 'Confirm'),
             ),
             const SizedBox(height: 6),
             TextButton(
               onPressed: _busy ? null : () => Navigator.of(context).pop(),
-              child: const Text('Cancel', style: TextStyle(color: Brand.inkSoft)),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Brand.inkSoft),
+              ),
             ),
           ],
         ),
@@ -192,4 +242,9 @@ class _LifeStatusSheetState extends State<_LifeStatusSheet> {
   }
 }
 
-const _caption = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1, color: Brand.inkSoft);
+const _caption = TextStyle(
+  fontSize: 11,
+  fontWeight: FontWeight.w700,
+  letterSpacing: 1,
+  color: Brand.inkSoft,
+);

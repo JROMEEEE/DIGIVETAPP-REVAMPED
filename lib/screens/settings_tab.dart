@@ -34,6 +34,11 @@ class SettingsTab extends StatelessWidget {
                 color: Brand.maroon900,
               ),
             ),
+            const SizedBox(height: 4),
+            const Text(
+              'Manage your profile details and account password.',
+              style: TextStyle(fontSize: 14, color: Brand.inkSoft),
+            ),
             const SizedBox(height: 22),
             const _Label('MY DETAILS'),
             const SizedBox(height: 10),
@@ -46,6 +51,7 @@ class SettingsTab extends StatelessWidget {
               child: _Row(
                 icon: Icons.lock_outline_rounded,
                 title: 'Change password',
+                subtitle: 'Update the password you sign in with',
                 onTap: () => _showSheet(context, const _PasswordSheet()),
               ),
             ),
@@ -75,6 +81,8 @@ class SettingsTab extends StatelessWidget {
             _Row(
               icon: Icons.logout_rounded,
               title: 'Log out',
+              subtitle:
+                  'You’ll need your username and password to sign back in',
               danger: true,
               onTap: () => _confirmLogout(context),
             ),
@@ -143,10 +151,12 @@ class _Row extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
+    this.subtitle,
     this.danger = false,
   });
   final IconData icon;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
   final bool danger;
 
@@ -169,13 +179,28 @@ class _Row extends StatelessWidget {
               Icon(icon, color: danger ? color : Brand.maroon700, size: 22),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: Brand.inkSoft,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               if (!danger)

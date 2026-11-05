@@ -4,7 +4,15 @@
 /// passedAway / lost: the owner or LCVO marked the pet — no reminders, no due date.
 /// historical: last seen before 2024 (server's is_historical) — the old record
 /// is kept, but it isn't overdue and gets no reminders.
-enum DueStatus { overdue, dueSoon, upToDate, none, passedAway, lost, historical }
+enum DueStatus {
+  overdue,
+  dueSoon,
+  upToDate,
+  none,
+  passedAway,
+  lost,
+  historical,
+}
 
 DateTime _day(String iso) {
   final p = iso.substring(0, 10).split('-').map(int.parse).toList();
@@ -26,6 +34,8 @@ class Vaccination {
     this.vetName,
     this.lotNo,
     this.approvalCode,
+    this.sessionId,
+    this.sessionBarangay,
   });
 
   final String id;
@@ -36,6 +46,10 @@ class Vaccination {
   final String? vetName;
   final String? lotNo;
   final String? approvalCode;
+
+  /// The drive this shot was given at (null = walk-in), for receipts.
+  final String? sessionId;
+  final String? sessionBarangay;
 
   factory Vaccination.fromJson(Map<String, dynamic> j) => Vaccination(
     id: j['vaccination_id'] as String,
@@ -48,6 +62,8 @@ class Vaccination {
     vetName: j['veterinarian_name'] as String?,
     lotNo: j['manufacturer_lot_no'] as String?,
     approvalCode: j['approval_code'] as String?,
+    sessionId: j['session_id'] as String?,
+    sessionBarangay: j['session_barangay'] as String?,
   );
 }
 
@@ -114,7 +130,9 @@ class Pet {
       sex: j['sex'] as String?,
       color: j['color_markings'] as String?,
       lifeStatus: j['life_status'] as String?,
-      deceasedDate: j['deceased_date'] == null ? null : _day(j['deceased_date'] as String),
+      deceasedDate: j['deceased_date'] == null
+          ? null
+          : _day(j['deceased_date'] as String),
       lostDate: j['lost_date'] == null ? null : _day(j['lost_date'] as String),
       lifeNote: j['life_status_note'] as String?,
       lifeChangedAt: j['life_status_changed_at'] == null

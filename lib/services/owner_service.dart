@@ -37,19 +37,19 @@ class OwnerService {
     );
   }
 
-  /// Ask the office to correct one field on a pet. Owners can't edit records
-  /// directly; staff approve or reject the request. The server only accepts
-  /// pet_name, breed, color_markings, sex and birth_date, and scopes the pet
-  /// to the signed-in owner (the app never sends an owner id).
+  /// Ask the office to correct one or more fields on a pet in one request
+  /// (same as the web portal). Owners can't edit records directly; staff
+  /// approve or reject the whole request. The server only accepts pet_name,
+  /// breed, color_markings, sex and birth_date, and scopes the pet to the
+  /// signed-in owner (the app never sends an owner id).
   Future<void> submitRequest({
     required String petId,
-    required String field,
-    required String value,
+    required Map<String, String> changes,
     String? reason,
   }) async {
     await Api.instance.post('/owner/requests', {
       'petId': petId,
-      'changes': {field: value},
+      'changes': changes,
       if (reason != null && reason.isNotEmpty) 'reason': reason,
     });
   }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../services/api.dart';
 import '../services/auth_service.dart';
 import '../theme.dart';
+import 'recovery_sheet.dart';
 
 /// Owner sign-in. Wrong credentials always show the server's one generic
 /// message ("Invalid username or password") — the app never tries to tell
@@ -133,7 +134,25 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? const SizedBox(width: double.infinity)
                             : _ErrorBox(_error!),
                       ),
-                      const SizedBox(height: 22),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: Brand.maroon700,
+                          ),
+                          onPressed: _submitting
+                              ? null
+                              : () => showRecoverySheet(
+                                  context,
+                                  username: _username.text.trim(),
+                                ),
+                          child: const Text(
+                            'Forgot password?',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       SizedBox(
                         height: 54,
                         child: FilledButton(

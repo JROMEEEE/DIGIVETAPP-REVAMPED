@@ -4,6 +4,7 @@ import '../models/pet.dart';
 import '../services/owner_data.dart';
 import '../theme.dart';
 import '../widgets/fade_in.dart';
+import '../widgets/my_requests.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/state_message.dart';
 import 'pet_detail_screen.dart';
@@ -95,6 +96,7 @@ class _MyPetsTabState extends State<MyPetsTab> {
                   .any((r) => r.status.name == 'pending'),
             ),
           ),
+        MyRequestsSection(requests: data.requests),
       ],
     );
   }

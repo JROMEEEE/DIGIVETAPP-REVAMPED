@@ -9,16 +9,20 @@ enum AuthStatus { checking, signedIn, signedOut }
 /// Who is signed in, as the server reports it (`GET /api/auth/me`).
 /// Only what the UI needs; nothing here is written to disk.
 class OwnerUser {
-  OwnerUser(this.username, this.role, this.firstName);
+  OwnerUser(this.username, this.role, this.firstName, this.personId);
 
   final String username;
   final String role;
   final String? firstName;
 
+  /// The owner's person record (used for receipt numbers, as on the web).
+  final String? personId;
+
   factory OwnerUser.fromJson(Map<String, dynamic> j) => OwnerUser(
     (j['username'] ?? '') as String,
     (j['role'] ?? '') as String,
     j['first_name'] as String?,
+    j['person_id'] as String?,
   );
 }
 
@@ -66,7 +70,7 @@ class AuthService extends ChangeNotifier {
   void setFirstName(String? first) {
     final u = _user;
     if (u == null) return;
-    _user = OwnerUser(u.username, u.role, first);
+    _user = OwnerUser(u.username, u.role, first, u.personId);
     notifyListeners();
   }
 
@@ -114,7 +118,7 @@ class AuthService extends ChangeNotifier {
       final res = await Api.instance.get('/owner/profile');
       final profile = res['profile'];
       final first = profile is Map ? profile['first_name'] as String? : null;
-      return OwnerUser(user.username, user.role, first);
+      return OwnerUser(user.username, user.role, first, user.personId);
     } on ApiException {
       return user;
     }
