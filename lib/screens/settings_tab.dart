@@ -6,6 +6,7 @@ import '../services/api.dart';
 import '../services/auth_service.dart';
 import '../services/owner_data.dart';
 import '../services/owner_service.dart';
+import '../services/recovery_service.dart';
 import '../theme.dart';
 import '../widgets/fade_in.dart';
 import 'pet_care_tab.dart' show RemindSwitch;
@@ -55,6 +56,8 @@ class SettingsTab extends StatelessWidget {
                 onTap: () => _showSheet(context, const _PasswordSheet()),
               ),
             ),
+            const SizedBox(height: 10),
+            const FadeIn(index: 3, child: _RecoveryRow()),
             const SizedBox(height: 22),
             const _Label('NOTIFICATIONS'),
             const SizedBox(height: 10),
@@ -574,4 +577,331 @@ class _PasswordSheetState extends State<_PasswordSheet> {
       ],
     );
   }
+}
+
+/// Account → Recovery email: the address password-reset codes go to.
+/// Shows whether it's verified; tapping opens a two-step sheet (email +
+/// password -> a 6-digit code is mailed -> type it). Same Online routes as
+/// the web portal's Settings (/owner/recovery-email).
+class _RecoveryRow extends StatefulWidget {
+  const _RecoveryRow();
+
+  @override
+  State<_RecoveryRow> createState() => _RecoveryRowState();
+}
+
+class _RecoveryRowState extends State<_RecoveryRow> {
+  RecoveryEmailStatus? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final st = await RecoveryService.instance.status();
+      if (mounted) setState(() => _status = st);
+    } on ApiException {
+      // Leave the row in its neutral state.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final st = _status;
+    final subtitle = st == null
+        ? 'Used to reset your password if you forget it'
+        : st.verified
+        ? '${st.masked} · Verified'
+        : st.email != null
+        ? '${st.masked} · Not verified yet'
+        : 'Not set. Add one so you can reset a forgotten password';
+    return _Row(
+      icon: st?.verified == true
+          ? Icons.mark_email_read_outlined
+          : Icons.alternate_email_rounded,
+      title: 'Recovery email',
+      subtitle: subtitle,
+      onTap: () async {
+        if (st != null && !st.mailAvailable) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Email isn’t available right now. Please try again later.',
+              ),
+            ),
+          );
+          return;
+        }
+        await _showSheet(
+          context,
+          _RecoveryEmailSheet(
+            initialEmail: st != null && !st.verified ? st.email ?? '' : '',
+          ),
+        );
+        _load();
+        OwnerData.instance.refresh(); // the profile shows the new address
+      },
+    );
+  }
+}
+
+class _RecoveryEmailSheet extends StatefulWidget {
+  const _RecoveryEmailSheet({required this.initialEmail});
+  final String initialEmail;
+
+  @override
+  State<_RecoveryEmailSheet> createState() => _RecoveryEmailSheetState();
+}
+
+class _RecoveryEmailSheetState extends State<_RecoveryEmailSheet> {
+  late final _email = TextEditingController(text: widget.initialEmail);
+  final _password = TextEditingController();
+  final _code = TextEditingController();
+  String _step = 'email'; // email -> code -> done
+  String _sentTo = '';
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    _code.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      _sentTo = await RecoveryService.instance.sendVerifyCode(
+        email: _email.text.trim(),
+        password: _password.text,
+      );
+      _password.clear();
+      _code.clear();
+      if (mounted) setState(() => _step = 'code');
+    } on ApiException catch (e) {
+      _password.clear();
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirm() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await RecoveryService.instance.confirmVerifyCode(_code.text);
+      HapticFeedback.lightImpact();
+      if (mounted) setState(() => _step = 'done');
+    } on ApiException catch (e) {
+      _code.clear();
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  InputDecoration _deco(String label, {String? hint}) => InputDecoration(
+    labelText: label,
+    hintText: hint,
+    counterText: '',
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Brand.border, width: 1.2),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Brand.maroon700, width: 1.8),
+    ),
+  );
+
+  Widget _primary(String text, VoidCallback? onPressed) => SizedBox(
+    height: 54,
+    child: FilledButton(
+      style: FilledButton.styleFrom(
+        backgroundColor: Brand.maroon700,
+        disabledBackgroundColor: Brand.maroon700.withValues(alpha: 0.35),
+        foregroundColor: Colors.white,
+        disabledForegroundColor: Colors.white,
+        shape: const StadiumBorder(),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      ),
+      onPressed: onPressed,
+      child: Text(text),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    const title = TextStyle(
+      fontFamily: Brand.serif,
+      fontSize: 26,
+      fontWeight: FontWeight.w700,
+      color: Brand.maroon900,
+    );
+    const sub = TextStyle(fontSize: 14, height: 1.45, color: Brand.inkSoft);
+    final children = <Widget>[];
+    if (_step == 'email') {
+      children.addAll([
+        const Text('Recovery email', style: title),
+        const SizedBox(height: 6),
+        const Text(
+          'We’ll send a 6-digit code to this address to make sure it’s yours. Use an email only you can open.',
+          style: sub,
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _email,
+          enabled: !_busy,
+          keyboardType: TextInputType.emailAddress,
+          autofocus: true,
+          onChanged: (_) => setState(() {}),
+          decoration: _deco('Email'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _password,
+          enabled: !_busy,
+          obscureText: true,
+          onChanged: (_) => setState(() {}),
+          decoration: _deco('Current password'),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 14),
+          _ErrorText(_error!),
+        ],
+        const SizedBox(height: 20),
+        _primary(
+          _busy ? 'Sending…' : 'Send code',
+          _busy || _email.text.trim().isEmpty || _password.text.isEmpty
+              ? null
+              : _send,
+        ),
+      ]);
+    } else if (_step == 'code') {
+      children.addAll([
+        const Text('Check your email', style: title),
+        const SizedBox(height: 6),
+        Text.rich(
+          TextSpan(
+            style: sub,
+            children: [
+              const TextSpan(text: 'We sent a 6-digit code to '),
+              TextSpan(
+                text: _sentTo,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Brand.ink,
+                ),
+              ),
+              const TextSpan(text: '. It expires in 15 minutes.'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _code,
+          enabled: !_busy,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 8,
+          ),
+          onChanged: (_) => setState(() {}),
+          decoration: _deco('6-digit code', hint: '••••••'),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 14),
+          _ErrorText(_error!),
+        ],
+        const SizedBox(height: 20),
+        _primary(
+          _busy ? 'Checking…' : 'Confirm',
+          _busy || _code.text.length != 6 ? null : _confirm,
+        ),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: Brand.maroon700),
+          onPressed: _busy
+              ? null
+              : () => setState(() {
+                  _step = 'email';
+                  _error = null;
+                }),
+          child: const Text(
+            'Send a new code',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ]);
+    } else {
+      children.addAll([
+        const Text('Recovery email verified', style: title),
+        const SizedBox(height: 6),
+        Text(
+          'If you forget your password, you can reset it with a code sent to $_sentTo.',
+          style: sub,
+        ),
+        const SizedBox(height: 20),
+        _primary('Done', () => Navigator.of(context).pop()),
+      ]);
+    }
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          4,
+          24,
+          24 + MediaQuery.of(context).viewPadding.bottom,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorText extends StatelessWidget {
+  const _ErrorText(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFDECEA),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE6B3B3)),
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 13.5, color: Color(0xFFB3261E)),
+    ),
+  );
 }

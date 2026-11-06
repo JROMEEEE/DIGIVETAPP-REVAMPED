@@ -142,10 +142,27 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           onPressed: _submitting
                               ? null
-                              : () => showRecoverySheet(
-                                  context,
-                                  username: _username.text.trim(),
-                                ),
+                              : () async {
+                                  final changed = await showRecoverySheet(
+                                    context,
+                                    username: _username.text.trim(),
+                                  );
+                                  if (changed == null || !context.mounted) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    _username.text = changed;
+                                    _password.clear();
+                                    _error = null;
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Password changed. Log in with your new password.',
+                                      ),
+                                    ),
+                                  );
+                                },
                           child: const Text(
                             'Forgot password?',
                             style: TextStyle(fontWeight: FontWeight.w700),

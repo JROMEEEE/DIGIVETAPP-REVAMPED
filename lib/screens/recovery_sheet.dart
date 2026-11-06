@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../services/api.dart';
+import '../services/recovery_service.dart';
 import '../theme.dart';
 
 /// "Forgot password?" — the same two steps as the web owner login
-/// (digivetonline/client/src/pages/OwnerLoginPage.jsx). PLACEHOLDER: the
-/// screens are in place, but nothing is sent or changed yet; the last step
-/// tells the owner to contact the LCVO, exactly like the web.
-Future<void> showRecoverySheet(BuildContext context, {String? username}) {
-  return showModalBottomSheet<void>(
+/// (digivetonline/client/src/pages/OwnerLoginPage.jsx): username -> a
+/// 6-digit code is mailed to the account's VERIFIED recovery email -> code
+/// + new password. The server answers the same way whether or not the
+/// username exists, so this sheet never says which accounts are real.
+/// Returns the username when the password was changed, else null.
+Future<String?> showRecoverySheet(BuildContext context, {String? username}) {
+  return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -34,7 +39,18 @@ class _RecoverySheetState extends State<_RecoverySheet> {
   final _pass = TextEditingController();
   final _confirm = TextEditingController();
   bool _codeStep = false;
+  bool _busy = false;
+  bool? _available; // null = checking
   String? _note;
+
+  @override
+  void initState() {
+    super.initState();
+    RecoveryService.instance
+        .available()
+        .then((v) => mounted ? setState(() => _available = v) : null)
+        .catchError((_) => mounted ? setState(() => _available = false) : null);
+  }
 
   @override
   void dispose() {
@@ -44,10 +60,57 @@ class _RecoverySheetState extends State<_RecoverySheet> {
     super.dispose();
   }
 
-  void _go(bool codeStep) => setState(() {
-    _codeStep = codeStep;
-    _note = null;
-  });
+  Future<void> _request() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _note = null;
+    });
+    try {
+      await RecoveryService.instance.requestResetCode(_who.text.trim());
+      if (!mounted) return;
+      _code.clear();
+      _pass.clear();
+      _confirm.clear();
+      setState(() => _codeStep = true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _note = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reset() async {
+    if (_pass.text.length < 8) {
+      setState(() => _note = 'The new password needs at least 8 characters.');
+      return;
+    }
+    if (_pass.text != _confirm.text) {
+      setState(() => _note = 'The new passwords don’t match.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _note = null;
+    });
+    try {
+      await RecoveryService.instance.resetPassword(
+        username: _who.text.trim(),
+        code: _code.text,
+        newPassword: _pass.text,
+      );
+      HapticFeedback.lightImpact();
+      if (mounted) Navigator.of(context).pop(_who.text.trim());
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _code.clear();
+      setState(() {
+        _note = e.message;
+        _busy = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,17 +138,31 @@ class _RecoverySheetState extends State<_RecoverySheet> {
     const _Title('Reset your password'),
     const SizedBox(height: 6),
     const _Sub(
-      'Enter your username or the email on your account. We’ll email you a 6-digit code.',
+      'Enter your username. If your account has a verified recovery email, we’ll email you a 6-digit code.',
     ),
     const SizedBox(height: 20),
-    _input(
-      _who,
-      'Username or email',
-      autofocus: true,
-      onChanged: (_) => setState(() {}),
+    if (_available == false)
+      _noteBox(
+        'Password reset by email isn’t available right now. Please contact the Lipa City Veterinary Office for help.',
+      )
+    else ...[
+      _input(
+        _who,
+        'Username',
+        autofocus: true,
+        onChanged: (_) => setState(() {}),
+      ),
+      if (_note != null) ...[const SizedBox(height: 14), _noteBox(_note!)],
+      const SizedBox(height: 20),
+      _button(
+        _busy ? 'Sending…' : 'Send reset code',
+        who.isEmpty || _busy || _available == null ? null : _request,
+      ),
+    ],
+    const SizedBox(height: 10),
+    const _Sub(
+      'No recovery email on your account? Please contact the Lipa City Veterinary Office.',
     ),
-    const SizedBox(height: 20),
-    _button('Send reset code', who.isEmpty ? null : () => _go(true)),
     const SizedBox(height: 6),
     _link('‹ Back to log in', () => Navigator.of(context).pop()),
   ];
@@ -111,7 +188,7 @@ class _RecoverySheetState extends State<_RecoverySheet> {
           ),
           const TextSpan(
             text:
-                ' has an email on file, a 6-digit code is on its way. It expires in 15 minutes.',
+                ' has a verified recovery email, a 6-digit code is on its way. It expires in 15 minutes.',
           ),
         ],
       ),
@@ -123,43 +200,46 @@ class _RecoverySheetState extends State<_RecoverySheet> {
       autofocus: true,
       number: true,
       hint: '••••••',
+      onChanged: (_) => setState(() {}),
     ),
     const SizedBox(height: 12),
     _input(_pass, 'New password', obscure: true, hint: 'At least 8 characters'),
     const SizedBox(height: 12),
     _input(_confirm, 'Confirm new password', obscure: true),
-    if (_note != null) ...[
-      const SizedBox(height: 14),
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFDECEA),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE6B3B3)),
-        ),
-        child: Text(
-          _note!,
-          style: const TextStyle(fontSize: 13.5, color: Color(0xFFB3261E)),
-        ),
-      ),
-    ],
+    if (_note != null) ...[const SizedBox(height: 14), _noteBox(_note!)],
     const SizedBox(height: 20),
     _button(
-      'Reset password',
-      () => setState(
-        () => _note =
-            'Password recovery isn’t switched on yet. Please contact the Lipa City Veterinary Office for help.',
-      ),
+      _busy ? 'Resetting…' : 'Reset password',
+      _busy || _code.text.length != 6 ? null : _reset,
     ),
     const SizedBox(height: 6),
     Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _link('Send a new code', () => _go(false)),
+        _link(
+          'Send a new code',
+          () => setState(() {
+            _codeStep = false;
+            _note = null;
+          }),
+        ),
         _link('‹ Back to log in', () => Navigator.of(context).pop()),
       ],
     ),
   ];
+
+  Widget _noteBox(String text) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFDECEA),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE6B3B3)),
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 13.5, color: Color(0xFFB3261E)),
+    ),
+  );
 
   Widget _input(
     TextEditingController c,
@@ -173,8 +253,15 @@ class _RecoverySheetState extends State<_RecoverySheet> {
     controller: c,
     autofocus: autofocus,
     obscureText: obscure,
-    maxLength: number ? 6 : null,
+    enabled: !_busy,
     keyboardType: number ? TextInputType.number : TextInputType.text,
+    // A pasted code keeps only its digits (an email may space them out).
+    inputFormatters: number
+        ? [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ]
+        : null,
     onChanged: onChanged,
     decoration: InputDecoration(
       labelText: label,
@@ -212,7 +299,7 @@ class _RecoverySheetState extends State<_RecoverySheet> {
 
   Widget _link(String text, VoidCallback onTap) => TextButton(
     style: TextButton.styleFrom(foregroundColor: Brand.maroon700),
-    onPressed: onTap,
+    onPressed: _busy ? null : onTap,
     child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
   );
 }
